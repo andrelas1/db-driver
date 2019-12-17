@@ -1,0 +1,16 @@
+version: '3'
+services:
+  node:
+    links: 
+      - database
+    working_dir: /usr/src/app  
+    image: node:12.13.1
+    volumes: 
+      - .:/usr/src/app  
+    command: ["npm", "start"]
+    ports:
+      - "3000:3000"
+  database:
+    image: mongo
+    ports:
+      - "27017:27017"

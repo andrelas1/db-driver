@@ -1,0 +1,11 @@
+# IDE
+.idea
+
+# Node
+node_modules
+
+# Dist
+dist
+
+# Misc
+TODO.md

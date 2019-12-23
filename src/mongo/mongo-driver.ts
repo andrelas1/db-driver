@@ -10,7 +10,6 @@ export class MongoDbDriver {
    * The subject used to trigger the observable.next from the outside. By default it always send the client
    * with the connection open.
    */
-  public databaseSubject$: BehaviorSubject<MongoClient>;
 
   // the MongoClient from the JS library
   public client: MongoClient;
@@ -22,7 +21,6 @@ export class MongoDbDriver {
    */
   constructor(url: string, dbOptions: MongoClientOptions) {
     this.client = this.getMongoClientInstance(url, dbOptions);
-    this.databaseSubject$ = new BehaviorSubject<MongoClient>(this.client);
   }
 
   /**
@@ -34,10 +32,18 @@ export class MongoDbDriver {
     const connectedClient$ = from(this.openConnection(this.client)).pipe(
       catchError(e => of(e))
     );
-    return this.databaseSubject$.pipe(
-      mergeMap(client =>
-        connectedClient$.pipe(map(result => client.db(dbName)))
-      )
+
+    return connectedClient$.pipe(map(client => client.db(dbName)));
+  }
+
+  public getCollection$(
+    dbName: string,
+    collectionName: string
+  ): Observable<any[]> {
+    return this.getDatabase$(dbName).pipe(
+      map(db => db.collection(collectionName)),
+      map(collection => collection.find().toArray()),
+      flatMap(response => response)
     );
   }
 
@@ -47,10 +53,12 @@ export class MongoDbDriver {
    * @param collectionName the collection that will receive the new document
    * @param databaseName the database that contains the target collection to be updated
    * @param newItem the new document
+   *
+   * TODO: Simplify this code to follow the same pattern as the writeManyToCollection
    */
   public writeOneToCollection$<T>(
-    collectionName: string,
     databaseName: string,
+    collectionName: string,
     newItem: T
   ): Observable<T[]> {
     return new Observable<T[]>(observer => {
@@ -61,6 +69,9 @@ export class MongoDbDriver {
         if (result.insertedCount === 1) {
           const updatedData = await cl.find().toArray();
           observer.next(updatedData);
+          observer.complete();
+        } else {
+          observer.error("ERROR - writeOneToCollection");
         }
       });
     });
@@ -74,24 +85,21 @@ export class MongoDbDriver {
    * @param newItems the new documents
    */
   public writeManyToCollection$<T>(
-    collectionName: string,
     dbName: string,
+    collectionName: string,
     newItems: T[]
   ): Observable<T[]> {
-    return new Observable<T[]>(observer => {
-      const collection$ = this.collectionFactory$<T>(collectionName, dbName);
-      collection$.subscribe(async cl => {
-        const result = await cl.insertMany(newItems);
-        if (result.insertedCount === newItems.length) {
-          const updatedData = await cl.find().toArray();
-          observer.next(updatedData);
+    return this.getDatabase$(dbName).pipe(
+      map(db => db.collection(collectionName)),
+      flatMap(collection => collection.insertMany(newItems)),
+      flatMap(res => {
+        if (res.insertedCount === newItems.length) {
+          return of(newItems);
         } else {
-          throw new Error(
-            "WRITE MANY - insert operation could not be processed"
-          );
+          throw new Error("ERROR - writeManyToCollection");
         }
-      });
-    });
+      })
+    );
   }
 
   /**
@@ -123,26 +131,6 @@ export class MongoDbDriver {
         } else {
           resolve(client);
         }
-      });
-    });
-  }
-
-  /**
-   * returns a mongodb collection observable
-   *
-   * @param collectionName
-   * @param databaseName
-   */
-  private collectionFactory$<T>(
-    collectionName: string,
-    databaseName: string
-  ): Observable<Collection<T>> {
-    const database$ = this.getDatabase$(databaseName);
-    return new Observable<Collection>(observer => {
-      database$.subscribe(async db => {
-        const cl = db.collection(collectionName);
-        observer.next(cl);
-        observer.complete();
       });
     });
   }

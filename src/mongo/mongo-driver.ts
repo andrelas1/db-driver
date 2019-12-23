@@ -1,6 +1,6 @@
-import { Collection, Db, MongoClient, MongoClientOptions } from "mongodb";
-import { BehaviorSubject, combineLatest, from, Observable, of } from "rxjs";
-import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
+import { Db, MongoClient, MongoClientOptions } from "mongodb";
+import { from, Observable, of } from "rxjs";
+import { catchError, flatMap, map } from "rxjs/operators";
 
 /*
     Access the MongoDB as well as executes operations on the collection.

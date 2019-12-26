@@ -1,11 +1,11 @@
 import { DatabaseDriver } from "./index";
+import { MongoDbDriver } from "./mongo";
 
-describe("database-driver", () => {
-  let databaseDriver: DatabaseDriver;
-  beforeAll(() => {
-    databaseDriver = new DatabaseDriver("mongo", "url");
-  });
-  test("passes", () => {
-    expect(true).toBeTruthy();
+describe("DatabaseDriver", () => {
+  describe("when instatiating as a mongodb driver", () => {
+    test("should return an object that is an instanceof MongoDbDriver", () => {
+      const dbDriver = new DatabaseDriver("mongodb", { url: "url" }, {});
+      expect(dbDriver.dbType).toEqual("mongodb");
+    });
   });
 });

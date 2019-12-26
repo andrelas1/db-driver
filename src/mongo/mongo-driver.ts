@@ -1,16 +1,11 @@
 import { Db, MongoClient, MongoClientOptions } from "mongodb";
-import { from, Observable, of } from "rxjs";
-import { catchError, flatMap, map } from "rxjs/operators";
+import { from, Observable, of, OperatorFunction } from "rxjs";
+import { catchError, flatMap, map, merge, mergeMap, tap } from "rxjs/operators";
 
 /*
     Access the MongoDB as well as executes operations on the collection.
 */
 export class MongoDbDriver {
-  /**
-   * The subject used to trigger the observable.next from the outside. By default it always send the client
-   * with the connection open.
-   */
-
   // the MongoClient from the JS library
   public client: MongoClient;
 
@@ -36,10 +31,21 @@ export class MongoDbDriver {
     return connectedClient$.pipe(map(client => client.db(dbName)));
   }
 
-  public getCollection$(
+  /**
+   * Should return an observable that is triggered
+   * everytime a write/delete operation is done.
+   *
+   * Done via a subject?
+   *
+   * @param dbName
+   * @param collectionName
+   *
+   * @returns observable of the chosen collection
+   */
+  public getCollection$<T>(
     dbName: string,
     collectionName: string
-  ): Observable<any[]> {
+  ): Observable<T[]> {
     return this.getDatabase$(dbName).pipe(
       map(db => db.collection(collectionName)),
       map(collection => collection.find().toArray()),
@@ -48,40 +54,43 @@ export class MongoDbDriver {
   }
 
   /**
-   * write one document to a mongodb collection and return a new observable of the collection
+   * write one document to a mongodb collection and
+   * return a new observable of the collection
    *
    * @param collectionName the collection that will receive the new document
-   * @param databaseName the database that contains the target collection to be updated
+   * @param databaseName the database that contains the target
+   * collection to be updated
    * @param newItem the new document
    *
-   * TODO: Simplify this code to follow the same pattern as the writeManyToCollection
    */
   public writeOneToCollection$<T>(
     databaseName: string,
     collectionName: string,
     newItem: T
   ): Observable<T[]> {
-    return new Observable<T[]>(observer => {
-      const database$ = this.getDatabase$(databaseName);
-      database$.subscribe(async db => {
-        const cl = db.collection(collectionName);
-        const result = await cl.insertOne(newItem);
-        if (result.insertedCount === 1) {
-          const updatedData = await cl.find().toArray();
-          observer.next(updatedData);
-          observer.complete();
+    return this.getDatabase$(databaseName).pipe(
+      map(db => db.collection(collectionName)),
+      mergeMap(collection => {
+        return from(collection.insertOne(newItem)).pipe(
+          map(res => ({ col: collection.find().toArray(), command: res }))
+        );
+      }),
+      flatMap(res => {
+        if (res.command.insertedCount === 1) {
+          return from(res.col);
         } else {
-          observer.error("ERROR - writeOneToCollection");
+          throw new Error("ERROR - deleteOneFromCollection");
         }
-      });
-    });
+      })
+    );
   }
 
   /**
    * write many documents to a mongodb collection
    *
    * @param collectionName the collection that will receive the new documents
-   * @param databaseName the database that contains the target collection to be updated
+   * @param databaseName the database that contains the target
+   * collection to be updated
    * @param newItems the new documents
    */
   public writeManyToCollection$<T>(
@@ -91,13 +100,97 @@ export class MongoDbDriver {
   ): Observable<T[]> {
     return this.getDatabase$(dbName).pipe(
       map(db => db.collection(collectionName)),
-      flatMap(collection => collection.insertMany(newItems)),
+      mergeMap(collection => {
+        return from(collection.insertMany(newItems)).pipe(
+          map(res => ({ col: collection.find().toArray(), command: res }))
+        );
+      }),
       flatMap(res => {
-        if (res.insertedCount === newItems.length) {
-          return of(newItems);
+        if (res.command.insertedCount === newItems.length) {
+          return from(res.col);
         } else {
-          throw new Error("ERROR - writeManyToCollection");
+          throw new Error("ERROR - deleteOneFromCollection");
         }
+      })
+    );
+  }
+
+  /**
+   * Deletes an item from a collection
+   *
+   * @param dbName
+   * @param collectionName
+   * @param item
+   *
+   * @returns the updated collection
+   */
+  public deleteOneFromCollection$<T>(
+    dbName: string,
+    collectionName: string,
+    item: T
+  ): Observable<T[]> {
+    return this.getDatabase$(dbName).pipe(
+      // TODO: create custom operator
+      map(db => db.collection(collectionName)),
+      mergeMap(collection => {
+        return from(collection.deleteOne(item)).pipe(
+          map(res => ({ col: collection.find().toArray(), command: res }))
+        );
+      }),
+      flatMap(res => {
+        if (res.command.deletedCount === 1) {
+          return from(res.col);
+        } else {
+          throw new Error("ERROR - deleteOneFromCollection");
+        }
+      })
+    );
+  }
+
+  /**
+   * Deletes items from a collection
+   *
+   * @param dbName
+   * @param collectionName
+   * @param items
+   *
+   * @returns the updated collection
+   */
+  public deleteAllFromCollection$<T>(
+    dbName: string,
+    collectionName: string
+  ): Observable<T[]> {
+    return this.getDatabase$(dbName).pipe(
+      // TODO: create custom operator
+      map(db => db.collection(collectionName)),
+      mergeMap(collection => {
+        return from(collection.deleteMany({})).pipe(
+          map(res => ({ col: collection.find().toArray(), command: res }))
+        );
+      }),
+      flatMap(res => {
+        return from(res.col);
+      })
+    );
+  }
+
+  public updateOneFromCollection$<T>(
+    dbName: string,
+    collectionName: string,
+    oldItem: T,
+    newItem: T
+  ): Observable<T[]> {
+    return this.getDatabase$(dbName).pipe(
+      map(db => db.collection(collectionName)),
+      mergeMap(collection => {
+        return from(
+          collection.updateOne(oldItem, { $set: { ...newItem } })
+        ).pipe(
+          map(res => ({ col: collection.find().toArray(), command: res }))
+        );
+      }),
+      flatMap(res => {
+        return from(res.col);
       })
     );
   }
@@ -116,7 +209,8 @@ export class MongoDbDriver {
   }
 
   /**
-   * Since every operation in mongodb using the client has to open a new connection
+   * Since every operation in mongodb using the client has to open a
+   * new connection
    * this method opens the connection and on success returns the client.
    * On error returns the error sent by
    * mongodb

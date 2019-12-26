@@ -1,13 +1,11 @@
 {
-  "name": "db-driver",
+  "name": "@andrelas1/db-driver",
   "version": "1.0.0",
-  "description": "",
+  "description": "Database Driver for MongoDB, MySQL and PostgreSQL",
   "main": "dist/index.js",
   "scripts": {
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
-    "prestart": "npm run build",
-    "start": "node .",
     "test": "jest --watch"
   },
   "repository": {

@@ -38,53 +38,133 @@ can be used. Finally, there is no callback chaining (or callback hell), which is
 
 ## Requirements
 
-NodeJS: 10+
-TypeScript: 3.7.2+
+NodeJS: 10+ <br>
+TypeScript: 3.7.2+ <br>
 MongoDB: 4.2.1+
 
 ## How to use
 
-1. Setup your Database
+### Setup your Database
 
-   - MongoDB: MongoDB LTS has to be up and running.
+- MongoDB: MongoDB LTS has to be up and running.
+- Browser's localStorage: TBD.
+- MySQL: TBD.
+- PostgreSQL: TBD.
 
-2. Instantiate the dbDriver object
-   `
-   import { DatabaseDriver } from '@andrelas1/db-driver';
+### Instantiate the dbDriver object
+
+```typescript
+import { DatabaseDriver } from '@andrelas1/db-driver';
 
 const dbDriver = new DatabaseDriver(
-'mongodb', // database type -> 'mongodb' | 'localStorage' | 'mysql' | 'postgresql'
-{
-url: 'mongodb://localhost:27017' // db url
-username?: 'db-login-username', // username
-password?: '**\*\***' // password
-},
-options // usually, db clients exposes a config object. Since this still only supports mongo, this is equivalent to the MongoClientOptions
+    'mongodb', // database type -> 'mongodb' | 'localStorage' | 'mysql' | 'postgresql'
+    {
+        url: 'mongodb://localhost:27017' // db url
+        username?: 'db-login-username', // username
+        password?: '**\*\***' // password
+    },
+    options // usually, db clients exposes a config object. Since this still only supports mongo, this is equivalent to the MongoClientOptions
 );
-`
+```
 
 3.  Execute CRUD operations
 
-        Every CRUD operation returns an observable of the updated collection. The collection is the list of
-
-    items. Moreover, for better experience, the CRUD method can get a type via TS generics, just like the following:
+Every CRUD operation returns an observable of the updated collection. The collection is the list of items. Moreover, for better experience, the CRUD method can get a type via TS generics, just like the following:
 
 - write data to the db
-  `dbDriver.insert<{foo: string}>('mydbname', 'mycollection', { foo: 'bar' }) .pipe( catchError(err => { console.log('CATCHED ERROR', err); // handle error return of([]); }) ) .subscribe((col: Array<{foo: string}>) => { // do something })`
+
+```typescript
+dbDriver
+  .insert<{ foo: string }>("mydbname", "mycollection", { foo: "bar" })
+  .pipe(
+    catchError(err => {
+      //handle error
+      return of([]);
+    })
+  )
+  .subscribe((col: Array<{ foo: string }>) => {
+    // do something
+  });
+```
 
 It is also possible to provide a list of objects, such as:
-`dbDriver .insert<MyItemType>('mydbname', 'mycollection', [{ foo: 'bar'}, { foo: 'foobar' }])`
+
+```typescript
+dbDriver.insert<MyItemType>("mydbname", "mycollection", [
+  { foo: "bar" },
+  { foo: "foobar" }
+]);
+```
 
 - read data from the db
-  `dbDriver.read<MyItemType>('mydbname', 'mycollection') .pipe( catchError(err => { console.log('CATCHED ERROR', err); // handle error return of([]); }) ) .subscribe((col: Array<{foo: string}>) => { // do something })`
+
+```typescript
+dbDriver.read<MyItemType>('mydbname', 'mycollection')
+    .pipe(
+        catchError(err => {
+            // handle error
+            return of([]);
+        })
+    )
+    .subscribe((col: Array<{foo: string}>) => { // do something })
+```
 
 - delete data from the db
-  `dbDriver .delete<MyItemType>('mydbname', 'mycollection', { foo: 'bar' }) .pipe( catchError(err => { console.log('CATCHED ERROR', err); // handle error return of([]); }) ) .subscribe((col: Array<{foo: string}>) => { // do something })`
+
+```typescript
+dbDriver.delete<MyItemType>('mydbname', 'mycollection', { foo: 'bar' })
+    .pipe(
+        catchError(err => {
+            // handle error
+            return of([]);
+        })
+    )
+    .subscribe((col: Array<{foo: string}>) => { // do something })
+```
 
 Delete can only receive one object.
 
 - delete all data from the db
-  `dbDriver .deleteAll('mydbname', 'mycollection') .pipe( catchError(err => { console.log('CATCHED ERROR', err); // handle error return of([]); }) ) .subscribe((col: any[]) => { // do something })`
+
+```typescript
+dbDriver
+  .deleteAll("mydbname", "mycollection")
+  .pipe(
+    catchError(err => {
+      // handle error
+      return of([]);
+    })
+  )
+  .subscribe((col: any[]) => {
+    // do something
+  });
+```
 
 - update data from the db
-  `dbDriver.update<MyItemType>('mydbname', 'mycollection', { foo: 'bar }, { foo: 'foobar' }) .pipe( catchError(err => { console.log('CATCHED ERROR', err); // handle error return of([]); }) ) .subscribe((col: Array<{foo: string}>) => { // do something })`
+
+```typescript
+dbDriver
+  .update<MyItemType>(
+    "mydbname",
+    "mycollection",
+    { foo: "bar" },
+    { foo: "foobar" }
+  )
+  .pipe(
+    catchError(err => {
+      // handle error
+      return of([]);
+    })
+  )
+  .subscribe((col: Array<{ foo: string }>) => {
+    // do something
+  });
+```
+
+## License
+
+MIT
+
+## Contributions
+
+TBD

@@ -49,6 +49,10 @@ export class DatabaseDriver {
     );
   }
 
+  public deleteAll<T>(dbName: string, collectionName: string): Observable<T[]> {
+    return this.client.deleteAllFromCollection$(dbName, collectionName);
+  }
+
   public update<T>(
     dbName: string,
     collectionName: string,

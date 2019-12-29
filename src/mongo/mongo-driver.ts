@@ -1,9 +1,9 @@
 import { Db, MongoClient, MongoClientOptions } from "mongodb";
-import { from, Observable, of, OperatorFunction } from "rxjs";
-import { catchError, flatMap, map, merge, mergeMap, tap } from "rxjs/operators";
+import { from, Observable, of } from "rxjs";
+import { catchError, flatMap, map, mergeMap } from "rxjs/operators";
 
 /*
-    Access the MongoDB as well as executes operations on the collection.
+    Access the MongoDB as well as executes operations on a collection.
 */
 export class MongoDbDriver {
   // the MongoClient from the JS library
@@ -24,11 +24,17 @@ export class MongoDbDriver {
    * @param dbName the mongodb database name
    */
   public getDatabase$(dbName: string): Observable<Db> {
-    const connectedClient$ = from(this.openConnection(this.client)).pipe(
-      catchError(e => of(e))
-    );
+    const connectedClient$ = from(this.openConnection(this.client));
 
-    return connectedClient$.pipe(map(client => client.db(dbName)));
+    return connectedClient$.pipe(
+      catchError(err => {
+        throw new Error(
+          "The MongoDB client could not be instantiated. Log from the MongoDB client:  " +
+            err
+        );
+      }),
+      map(client => client.db(dbName))
+    );
   }
 
   /**

@@ -58,14 +58,14 @@ describe("mongo driver", () => {
     await mongod.stop();
   }
 
-  async function initMongoDB() {
+  async function initMongoDB(dbUri?: string) {
     const mongoDbTestDbUtils = await setupMongoTestDb();
     dbName = mongoDbTestDbUtils.dbName;
     dbPath = mongoDbTestDbUtils.dbPath;
     mongod = mongoDbTestDbUtils.mongod;
     port = mongoDbTestDbUtils.port;
     uri = mongoDbTestDbUtils.uri;
-    mongoDbDriver = new MongoDbDriver(uri, dbDriverOpts);
+    mongoDbDriver = new MongoDbDriver(dbUri || uri, dbDriverOpts);
   }
 
   /**
@@ -109,6 +109,32 @@ describe("mongo driver", () => {
       database$.subscribe(db => {
         expect(db instanceof Db).toBeTruthy();
         done();
+      });
+    });
+
+    describe("when an error is thrown", () => {
+      let db$: Observable<Db>;
+      let dbDriver: MongoDbDriver;
+      beforeEach(async () => {
+        dbDriver = new MongoDbDriver("http://localhost:27017", dbDriverOpts);
+        db$ = dbDriver.getDatabase$(dbName);
+      });
+      test("should throw an error with a message", done => {
+        db$
+          .pipe(
+            catchError(err => {
+              expect(
+                err.message.indexOf(
+                  "The MongoDB client could not be instantiated. Log from the MongoDB client:"
+                )
+              ).not.toEqual(-1);
+              done();
+              return of([]);
+            })
+          )
+          .subscribe(db => {
+            //
+          });
       });
     });
   });

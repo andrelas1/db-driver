@@ -3,7 +3,7 @@
 Wraps common CRUD functionalities of MongoDB, MySQL, PostgreSQL and LocalStorage (Browser) to a single API, adding more consistency and using the power of <br>
 the RxJS library.
 
-Currently only supports MONGODB 4.2+
+Currently only supports MongoDB
 
 future support:
 
@@ -15,9 +15,10 @@ future support:
 
 - NodeJS
 - RxJS
-- MongoDB
+- MongoDB NodeJS Driver
 - MySQL
 - LocalStorage (Browser)
+- PostgreSQL
 
 ## The purpose
 

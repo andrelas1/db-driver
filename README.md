@@ -169,3 +169,15 @@ MIT
 ## Contributions
 
 TBD
+
+## ROADMAP
+
+1. Document explaining release process (CI/CD). Github release.
+2. Implement CI/CD.
+3. Fix multiple connections issue.
+4. Enable username/password for MongoDB.
+5. Declaration file for DatabaseDriver. Do not rely on the declaration files created by typescript.
+6. Decide about architecturing based on database events. Every CRUD operation is an event and it is observed by an observer.
+7. LocalStorage (and how does third party apps bundle this package?).
+8. MySQL.
+9. PostgreSQL.

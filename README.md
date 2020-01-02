@@ -68,7 +68,7 @@ const dbDriver = new DatabaseDriver(
 );
 ```
 
-3.  Execute CRUD operations
+### Execute CRUD operations
 
 Every CRUD operation returns an observable of the updated collection. The collection is the list of items. Moreover, for better experience, the CRUD method can get a type via TS generics, just like the following:
 

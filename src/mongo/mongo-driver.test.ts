@@ -53,6 +53,7 @@ describe("mongo driver", () => {
   let dbName: string;
   let mongoDbDriver: MongoDbDriver;
   let mongod: MongoMemoryServer;
+  let client: MongoClient;
 
   async function stopMongoDB() {
     await mongod.stop();
@@ -77,12 +78,15 @@ describe("mongo driver", () => {
    *
    * @returns Promise of Collection
    */
-  async function setupBeforeTest(
+  async function resetDatabaseBeforeTest(
     collectionName: string,
     newItems?: any[]
   ): Promise<Collection> {
-    const mongoUri = await mongod.getConnectionString();
-    const client = await MongoClient.connect(mongoUri, dbDriverOpts);
+    if (client) {
+      client.close();
+    }
+    client = new MongoClient(uri, dbDriverOpts);
+    await client.connect();
     const db = client.db(dbName);
     await db.collection(collectionName).deleteMany({});
     if (newItems) {
@@ -142,7 +146,7 @@ describe("mongo driver", () => {
   describe("when performing CRUD operations in a collection", () => {
     describe("when reading the collection", () => {
       beforeAll(async () => {
-        await setupBeforeTest("words", words);
+        await resetDatabaseBeforeTest("words", words);
       });
 
       test("should return the collection observable", done => {
@@ -153,13 +157,19 @@ describe("mongo driver", () => {
           done();
         });
       });
+      test("should close the connection after the operation", done => {
+        mongoDbDriver.getCollection$(dbName, "words").subscribe(collection => {
+          expect(mongoDbDriver.client.isConnected()).toBeFalsy();
+          done();
+        });
+      });
     });
 
     describe("when writing to the collection", () => {
       let database$: Observable<Db>;
       let col: Collection;
       beforeEach(async () => {
-        col = await setupBeforeTest("words");
+        col = await resetDatabaseBeforeTest("words");
         database$ = mongoDbDriver.getDatabase$(dbName);
       });
 
@@ -201,19 +211,48 @@ describe("mongo driver", () => {
           done();
         });
       });
+
+      describe("after writing the connection should be closed", () => {
+        test("when writing many", done => {
+          const data$: Observable<IWord[]> = mongoDbDriver.writeManyToCollection$<
+            IWord
+          >(dbName, "words", words);
+
+          data$.subscribe(data => {
+            expect(mongoDbDriver.client.isConnected()).toBeFalsy();
+            done();
+          });
+        });
+
+        test("when writing once", done => {
+          const word = {
+            chapter: 1,
+            name: "allemaal",
+            translation: "all"
+          };
+          const data$: Observable<IWord[]> = mongoDbDriver.writeOneToCollection$<
+            IWord
+          >(dbName, "words", word);
+
+          data$.subscribe(data => {
+            expect(mongoDbDriver.client.isConnected()).toBeFalsy();
+            done();
+          });
+        });
+      });
     });
 
     describe("when deleting docs from the collection", () => {
       let collection: Collection;
-      beforeAll(async () => {
-        collection = await setupBeforeTest("words", words);
+      const item = {
+        chapter: 1,
+        name: "allemaal",
+        translation: "all"
+      };
+      beforeEach(async () => {
+        collection = await resetDatabaseBeforeTest("words", words);
       });
       test("should return the list without the removed element", done => {
-        const item = {
-          chapter: 1,
-          name: "allemaal",
-          translation: "all"
-        };
         mongoDbDriver
           .deleteOneFromCollection$(dbName, "words", item)
           .subscribe(async (col: any[]) => {
@@ -234,37 +273,60 @@ describe("mongo driver", () => {
             done();
           });
       });
+
+      test("should close the connection", done => {
+        mongoDbDriver
+          .deleteOneFromCollection$(dbName, "words", item)
+          .subscribe(_ => {
+            expect(mongoDbDriver.client.isConnected()).toBeFalsy();
+            done();
+          });
+      });
     });
     describe("when updating docs from the collection", () => {
       let cl: Collection;
       let oldItem: IWord;
-      beforeEach(async done => {
-        cl = await setupBeforeTest("words", words);
+      let newItem: IWord;
+      let result$: Observable<IWord[]>;
+
+      beforeAll(async done => {
+        cl = await resetDatabaseBeforeTest("words", words);
         mongoDbDriver
           .getCollection$<IWord>(dbName, "words")
           .subscribe(collection => {
             oldItem = collection[0];
+            newItem = {
+              ...oldItem,
+              chapter: 1,
+              name: "telefoon",
+              translation: "telephone"
+            };
+            result$ = mongoDbDriver.updateOneFromCollection$<IWord>(
+              dbName,
+              "words",
+              oldItem,
+              newItem
+            );
             done();
           });
       });
 
       test("should return the updated list", done => {
-        const newItem = {
-          ...oldItem,
-          chapter: 1,
-          name: "telefoon",
-          translation: "telephone"
-        };
-        mongoDbDriver
-          .updateOneFromCollection$<IWord>(dbName, "words", oldItem, newItem)
-          .subscribe(async (col: IWord[]) => {
-            expect(col).toContainEqual(newItem);
-            expect(col).not.toContainEqual(oldItem);
-            const collectionItems = await cl.find().toArray();
-            expect(collectionItems).toContainEqual(newItem);
-            expect(collectionItems).not.toContainEqual(oldItem);
-            done();
-          });
+        result$.subscribe(async (col: IWord[]) => {
+          expect(col).toContainEqual(newItem);
+          expect(col).not.toContainEqual(oldItem);
+          const collectionItems = await cl.find().toArray();
+          expect(collectionItems).toContainEqual(newItem);
+          expect(collectionItems).not.toContainEqual(oldItem);
+          done();
+        });
+      });
+
+      test("should close the connection after operation", done => {
+        result$.subscribe(_ => {
+          expect(mongoDbDriver.client.isConnected()).toBeFalsy();
+          done();
+        });
       });
     });
   });

@@ -1,6 +1,6 @@
 import { Db, MongoClient, MongoClientOptions } from "mongodb";
 import { from, Observable, of } from "rxjs";
-import { catchError, flatMap, map, mergeMap } from "rxjs/operators";
+import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
 
 /*
     Access the MongoDB as well as executes operations on a collection.
@@ -55,7 +55,10 @@ export class MongoDbDriver {
     return this.getDatabase$(dbName).pipe(
       map(db => db.collection(collectionName)),
       map(collection => collection.find().toArray()),
-      flatMap(response => response)
+      flatMap(response => response),
+      tap(_ => {
+        this.client.close();
+      })
     );
   }
 
@@ -87,6 +90,9 @@ export class MongoDbDriver {
         } else {
           throw new Error("ERROR - deleteOneFromCollection");
         }
+      }),
+      tap(_ => {
+        this.client.close();
       })
     );
   }
@@ -115,8 +121,11 @@ export class MongoDbDriver {
         if (res.command.insertedCount === newItems.length) {
           return from(res.col);
         } else {
-          throw new Error("ERROR - deleteOneFromCollection");
+          throw new Error("ERROR - writeManyToCollection");
         }
+      }),
+      tap(_ => {
+        this.client.close();
       })
     );
   }
@@ -149,6 +158,9 @@ export class MongoDbDriver {
         } else {
           throw new Error("ERROR - deleteOneFromCollection");
         }
+      }),
+      tap(_ => {
+        this.client.close();
       })
     );
   }
@@ -197,6 +209,9 @@ export class MongoDbDriver {
       }),
       flatMap(res => {
         return from(res.col);
+      }),
+      tap(_ => {
+        this.client.close();
       })
     );
   }

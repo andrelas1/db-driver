@@ -1,6 +1,9 @@
+import { EventEmitter } from "events";
 import { Db, MongoClient, MongoClientOptions } from "mongodb";
 import { from, Observable, of } from "rxjs";
 import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
+
+type DATABASE_EVENTS = "READ" | "WRITE" | "DELETE" | "UPDATE";
 
 /*
     Access the MongoDB as well as executes operations on a collection.
@@ -8,6 +11,8 @@ import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
 export class MongoDbDriver {
   // the MongoClient from the JS library
   public client: MongoClient;
+
+  private eventEmitter = new EventEmitter();
 
   /**
    *
@@ -63,38 +68,39 @@ export class MongoDbDriver {
   }
 
   /**
-   * write one document to a mongodb collection and
-   * return a new observable of the collection
+   * send a new node event with the new item to be inserted in the database
    *
    * @param collectionName the collection that will receive the new document
    * @param databaseName the database that contains the target
    * collection to be updated
    * @param newItem the new document
    *
+   * @returns void
    */
-  public writeOneToCollection$<T>(
+  public writeOneToCollection$(
     databaseName: string,
     collectionName: string,
-    newItem: T
-  ): Observable<T[]> {
-    return this.getDatabase$(databaseName).pipe(
-      map(db => db.collection(collectionName)),
-      mergeMap(collection => {
-        return from(collection.insertOne(newItem)).pipe(
-          map(res => ({ col: collection.find().toArray(), command: res }))
-        );
-      }),
-      flatMap(res => {
-        if (res.command.insertedCount === 1) {
-          return from(res.col);
-        } else {
-          throw new Error("ERROR - deleteOneFromCollection");
-        }
-      }),
-      tap(_ => {
-        this.client.close();
-      })
-    );
+    newItem: any
+  ): void {
+    this.eventEmitter.emit("read");
+    // return this.getDatabase$(databaseName).pipe(
+    //   map(db => db.collection(collectionName)),
+    //   mergeMap(collection => {
+    //     return from(collection.insertOne(newItem)).pipe(
+    //       map(res => ({ col: collection.find().toArray(), command: res }))
+    //     );
+    //   }),
+    //   flatMap(res => {
+    //     if (res.command.insertedCount === 1) {
+    //       return from(res.col);
+    //     } else {
+    //       throw new Error("ERROR - deleteOneFromCollection");
+    //     }
+    //   }),
+    //   tap(_ => {
+    //     this.client.close();
+    //   })
+    // );
   }
 
   /**
@@ -248,5 +254,27 @@ export class MongoDbDriver {
         }
       });
     });
+  }
+
+  private emit(
+    eventName: DATABASE_EVENTS,
+    data?: Array<{ [key: string]: any }> | { [key: string]: any }
+  ): void {
+    switch (eventName) {
+      case "READ":
+        this.eventEmitter.emit("READ");
+        break;
+      case "WRITE":
+        this.eventEmitter.emit("WRITE", data);
+        break;
+      case "DELETE":
+        this.eventEmitter.emit("DELETE", data);
+        break;
+      case "UPDATE":
+        this.eventEmitter.emit("UPDATE", data);
+        break;
+      default:
+        console.warn(eventName + " is an invalid event name");
+    }
   }
 }

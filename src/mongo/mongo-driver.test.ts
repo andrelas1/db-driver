@@ -1,6 +1,5 @@
 import { Collection, Db, MongoClient } from "mongodb";
-import { MongoMemoryServer } from "mongodb-memory-server";
-import { Observable, of } from "rxjs";
+import { BehaviorSubject, Observable, of } from "rxjs";
 import { catchError, skip } from "rxjs/operators";
 
 import { dbDriverOpts } from "../config";
@@ -47,26 +46,14 @@ const words = [
 ];
 
 describe("mongo driver", () => {
-  let uri: string;
-  let port: number;
-  let dbPath: string;
-  let dbName: string;
-  let mongoDbDriver: MongoDbDriver;
-  let mongod: MongoMemoryServer;
+  const mongoDbUri = "mongodb://127.0.0.1:27017";
+  const dbName = "test-db";
   let client: MongoClient;
-
-  async function stopMongoDB() {
-    await mongod.stop();
-  }
-
-  async function initMongoDB(dbUri?: string) {
-    const mongoDbTestDbUtils = await setupMongoTestDb();
-    dbName = mongoDbTestDbUtils.dbName;
-    dbPath = mongoDbTestDbUtils.dbPath;
-    mongod = mongoDbTestDbUtils.mongod;
-    port = mongoDbTestDbUtils.port;
-    uri = mongoDbTestDbUtils.uri;
-    mongoDbDriver = new MongoDbDriver(dbUri || uri, dbDriverOpts);
+  let mongoDbDriver: MongoDbDriver;
+  async function setupMongoDB(uri: string) {
+    client = new MongoClient(uri, dbDriverOpts);
+    await client.connect();
+    client.db("test-db");
   }
 
   /**
@@ -85,7 +72,7 @@ describe("mongo driver", () => {
     if (client) {
       client.close();
     }
-    client = new MongoClient(uri, dbDriverOpts);
+    client = new MongoClient(mongoDbUri, dbDriverOpts);
     await client.connect();
     const db = client.db(dbName);
     await db.collection(collectionName).deleteMany({});
@@ -96,7 +83,8 @@ describe("mongo driver", () => {
   }
 
   beforeAll(async () => {
-    await initMongoDB();
+    await setupMongoDB(mongoDbUri);
+    mongoDbDriver = new MongoDbDriver(mongoDbUri, dbDriverOpts);
   });
 
   describe("mongo observable factory", () => {
@@ -171,6 +159,7 @@ describe("mongo driver", () => {
       beforeEach(async () => {
         col = await resetDatabaseBeforeTest("words");
         database$ = mongoDbDriver.getDatabase$(dbName);
+
       });
 
       test("should return the updated data when adding a new doc", done => {
@@ -214,9 +203,8 @@ describe("mongo driver", () => {
 
       describe("after writing the connection should be closed", () => {
         test("when writing many", done => {
-          const data$: Observable<IWord[]> = mongoDbDriver.writeManyToCollection$<
-            IWord
-          >(dbName, "words", words);
+          const data$: Observable<IWord[]> = mongoDbDriver
+              .writeManyToCollection$<IWord>(dbName, "words", words);
 
           data$.subscribe(data => {
             expect(mongoDbDriver.client.isConnected()).toBeFalsy();
@@ -230,9 +218,8 @@ describe("mongo driver", () => {
             name: "allemaal",
             translation: "all"
           };
-          const data$: Observable<IWord[]> = mongoDbDriver.writeOneToCollection$<
-            IWord
-          >(dbName, "words", word);
+          const data$: Observable<IWord[]> = mongoDbDriver
+              .writeOneToCollection$<IWord>(dbName, "words", word);
 
           data$.subscribe(data => {
             expect(mongoDbDriver.client.isConnected()).toBeFalsy();

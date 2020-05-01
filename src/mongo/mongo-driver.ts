@@ -1,6 +1,15 @@
-import { Db, MongoClient, MongoClientOptions } from "mongodb";
-import { from, Observable, of } from "rxjs";
-import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
+import { Collection, Db, MongoClient, MongoClientOptions } from "mongodb";
+import { BehaviorSubject, from, Observable, of, Subject } from "rxjs";
+import {
+  catchError,
+  delay,
+  flatMap,
+  map,
+  mergeMap,
+  startWith,
+  tap
+} from "rxjs/operators";
+import { IOperationResult } from "./types";
 
 /*
     Access the MongoDB as well as executes operations on a collection.
@@ -8,6 +17,11 @@ import { catchError, flatMap, map, mergeMap, tap } from "rxjs/operators";
 export class MongoDbDriver {
   // the MongoClient from the JS library
   public client: MongoClient;
+  public objects: Array<{
+    dbName: string;
+    collectionName: string;
+    collection$: BehaviorSubject<any>;
+  }> = [];
 
   /**
    *
@@ -51,50 +65,103 @@ export class MongoDbDriver {
   public getCollection$<T>(
     dbName: string,
     collectionName: string
-  ): Observable<T[]> {
-    return this.getDatabase$(dbName).pipe(
-      map(db => db.collection(collectionName)),
-      map(collection => collection.find().toArray()),
-      flatMap(response => response),
-      tap(_ => {
-        this.client.close();
-      })
+  ): Observable<BehaviorSubject<T[]>> {
+    const foundCollection$ = this.findCollection$(dbName, collectionName);
+    if (foundCollection$) {
+      return of(foundCollection$ as BehaviorSubject<T[]>);
+    } else {
+      const connectedClient$ = from(this.openConnection(this.client));
+      return new Observable<BehaviorSubject<T[]>>(obs => {
+        connectedClient$.subscribe(async client => {
+          const db = client.db(dbName);
+          const collection = await db.collection(collectionName);
+          const result = await collection.find({}).toArray();
+          const subject = new BehaviorSubject(result);
+          this.objects.push({ dbName, collectionName, collection$: subject });
+          obs.next(subject);
+        });
+      });
+    }
+
+    // return this.getDatabase$(dbName).pipe(
+    //   map(db => db.collection(collectionName)),
+    //   map(collection => collection.find().toArray()),
+    //   flatMap(response => response),
+    //   tap(_ => {
+    //     this.client.close();
+    //   })
+    // );
+  }
+
+  public findCollection$<T>(
+    dbName: string,
+    collectionName: string
+  ): Observable<T[]> | undefined {
+    const object = this.objects.find(
+      db => db.dbName === dbName && db.collectionName === collectionName
     );
+    return object ? object.collection$ : undefined;
   }
 
   /**
    * write one document to a mongodb collection and
-   * return a new observable of the collection
+   * return a new observable of the result of the operation
    *
    * @param collectionName the collection that will receive the new document
    * @param databaseName the database that contains the target
    * collection to be updated
    * @param newItem the new document
    *
+   * @returns Observable of result
    */
   public writeOneToCollection$<T>(
     databaseName: string,
     collectionName: string,
     newItem: T
-  ): Observable<T[]> {
-    return this.getDatabase$(databaseName).pipe(
-      map(db => db.collection(collectionName)),
-      mergeMap(collection => {
-        return from(collection.insertOne(newItem)).pipe(
-          map(res => ({ col: collection.find().toArray(), command: res }))
-        );
-      }),
-      flatMap(res => {
-        if (res.command.insertedCount === 1) {
-          return from(res.col);
-        } else {
-          throw new Error("ERROR - deleteOneFromCollection");
-        }
-      }),
-      tap(_ => {
-        this.client.close();
-      })
+  ): Observable<IOperationResult> {
+    const collectionObject = this.objects.find(
+      object =>
+        object.dbName === databaseName &&
+        object.collectionName === collectionName
     );
+    const connectedClient = from(this.openConnection(this.client));
+    return new Observable<IOperationResult>(observer => {
+      if (collectionObject) {
+        connectedClient.subscribe(async client => {
+          const db = client.db(databaseName);
+          const cl = db.collection(collectionName);
+          const { insertedCount, insertedId } = await cl.insertOne(newItem);
+          const clData = await cl.find({}).toArray();
+          collectionObject.collection$.next(clData);
+          observer.next({ insertedCount, insertedId });
+          observer.complete();
+        });
+      } else {
+        observer.error(
+          "the database and/or collection name are not registered"
+        );
+        // TODO: rename getCollection$ to registerCollection$
+      }
+    });
+
+    // return this.getDatabase$(databaseName).pipe(
+    //   map(db => db.collection(collectionName)),
+    //   mergeMap(collection => {
+    //     return from(collection.insertOne(newItem)).pipe(
+    //       map(res => ({ col: collection.find().toArray(), command: res }))
+    //     );
+    //   }),
+    //   flatMap(res => {
+    //     if (res.command.insertedCount === 1) {
+    //       return from(res.col);
+    //     } else {
+    //       throw new Error("ERROR - deleteOneFromCollection");
+    //     }
+    //   }),
+    //   tap(_ => {
+    //     this.client.close();
+    //   })
+    // );
   }
 
   /**

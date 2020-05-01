@@ -9,6 +9,8 @@ import {
   startWith,
   tap
 } from "rxjs/operators";
+
+import { MongoDocumentObject } from "../utils/types/index.types";
 import { IOperationResult } from "./types";
 
 /*
@@ -65,22 +67,26 @@ export class MongoDbDriver {
   public getCollection$<T>(
     dbName: string,
     collectionName: string
-  ): Observable<BehaviorSubject<T[]>> {
+  ): Observable<BehaviorSubject<Array<MongoDocumentObject<T>>>> {
     const foundCollection$ = this.findCollection$(dbName, collectionName);
     if (foundCollection$) {
-      return of(foundCollection$ as BehaviorSubject<T[]>);
+      return of(
+        foundCollection$ as BehaviorSubject<Array<MongoDocumentObject<T>>>
+      );
     } else {
       const connectedClient$ = from(this.openConnection(this.client));
-      return new Observable<BehaviorSubject<T[]>>(obs => {
-        connectedClient$.subscribe(async client => {
-          const db = client.db(dbName);
-          const collection = await db.collection(collectionName);
-          const result = await collection.find({}).toArray();
-          const subject = new BehaviorSubject(result);
-          this.objects.push({ dbName, collectionName, collection$: subject });
-          obs.next(subject);
-        });
-      });
+      return new Observable<BehaviorSubject<Array<MongoDocumentObject<T>>>>(
+        obs => {
+          connectedClient$.subscribe(async client => {
+            const db = client.db(dbName);
+            const collection = await db.collection(collectionName);
+            const result = await collection.find({}).toArray();
+            const subject = new BehaviorSubject(result);
+            this.objects.push({ dbName, collectionName, collection$: subject });
+            obs.next(subject);
+          });
+        }
+      );
     }
 
     // return this.getDatabase$(dbName).pipe(

@@ -1,15 +1,15 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import { BehaviorSubject, Observable, of } from "rxjs";
-import { catchError, flatMap, skip } from "rxjs/operators";
 
 import { dbDriverOpts } from "../config";
-import { setupMongoTestDb } from "../utils";
+import { removeIdsFromObject } from "../utils";
 import { MongoDbDriver } from "./mongo-driver";
 
 interface IWord {
   chapter: number;
   name: string;
   translation: string;
+  _id: string;
 }
 
 const words = [
@@ -103,7 +103,6 @@ describe("mongo driver", () => {
       .find({})
       .toArray();
     const r = await db.collection(collectionName).deleteMany({});
-    console.log("R", r.deletedCount);
     if (newItems) {
       await db.collection(collectionName).insertMany(deepCloneArray(newItems));
     }
@@ -155,7 +154,7 @@ describe("mongo driver", () => {
 
       test("returns an initial list of words", done => {
         collection$.subscribe(res => {
-          expect(removeIds(res)).toEqual(removeIds(words));
+          expect(removeIdsFromObject<IWord>(res)).toEqual(removeIds(words));
           done();
         });
       });

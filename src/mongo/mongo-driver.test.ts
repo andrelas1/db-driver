@@ -2,7 +2,7 @@ import { Collection, Db, MongoClient } from "mongodb";
 import { BehaviorSubject, Observable, of } from "rxjs";
 
 import { dbDriverOpts } from "../config";
-import { removeIdsFromObject } from "../utils";
+import { mongoDbUtils } from "../utils";
 import { MongoDbDriver } from "./mongo-driver";
 
 interface IWord {
@@ -11,6 +11,8 @@ interface IWord {
   translation: string;
   _id: string;
 }
+
+const { removeIdsFromObject } = mongoDbUtils;
 
 const words = [
   {
@@ -58,19 +60,6 @@ describe("mongo driver", () => {
       arr.push({ ...obj });
     });
     return arr;
-  }
-
-  function removeIds(list: any[]) {
-    return list.map(item => {
-      const keys = Object.keys(item);
-      const obj = {};
-      keys.forEach(k => {
-        if (k.indexOf("id") === -1) {
-          (obj as any)[k] = item[k];
-        }
-      });
-      return obj;
-    });
   }
 
   async function setupMongoDB(uri: string) {
@@ -154,7 +143,7 @@ describe("mongo driver", () => {
 
       test("returns an initial list of words", done => {
         collection$.subscribe(res => {
-          expect(removeIdsFromObject<IWord>(res)).toEqual(removeIds(words));
+          expect(removeIdsFromObject<IWord>(res)).toEqual(words);
           done();
         });
       });
@@ -181,9 +170,9 @@ describe("mongo driver", () => {
       };
       test("writeOneToCollection returns operation result", done => {
         mongoDbDriver
-          .writeOneToCollection$(dbName, "words", newItem)
+          .writeDataToCollection$(dbName, "words", newItem)
           .subscribe(result => {
-            expect(result.insertedCount).toEqual(1);
+            expect(result.affectedCount).toEqual(1);
             done();
           });
       });
@@ -192,12 +181,13 @@ describe("mongo driver", () => {
           done();
         });
         mongoDbDriver
-          .writeOneToCollection$(dbName, "words", newItem)
+          .writeDataToCollection$(dbName, "words", newItem)
           .subscribe(res => {
             collection$.pipe().subscribe(result => {
-              expect(removeIds(result)).toStrictEqual(
-                removeIds([...words, newItem])
-              );
+              expect(removeIdsFromObject(result)).toStrictEqual([
+                ...words,
+                newItem
+              ]);
               done();
             });
           });

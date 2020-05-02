@@ -1,5 +1,5 @@
-import { DatabaseDriver } from "./index";
-import { MongoDbDriver } from "./mongo";
+import { MongoDbDriver } from "../mongo";
+import { DatabaseDriver } from "./database-driver";
 
 describe("DatabaseDriver", () => {
   describe("when instatiating as a mongodb driver", () => {

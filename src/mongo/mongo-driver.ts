@@ -1,4 +1,4 @@
-import { Collection, Db, MongoClient, MongoClientOptions } from "mongodb";
+import { Db, MongoClient, MongoClientOptions } from "mongodb";
 import { BehaviorSubject, from, Observable, of, Subject } from "rxjs";
 import {
   catchError,
@@ -10,13 +10,16 @@ import {
   tap
 } from "rxjs/operators";
 
-import { MongoDocumentObject } from "../utils/types/index.types";
-import { IOperationResult } from "./types";
+import {
+  IClientDriver,
+  IOperationResult,
+  MongoDocumentObject
+} from "../utils/types/index.types";
 
 /*
     Access the MongoDB as well as executes operations on a collection.
 */
-export class MongoDbDriver {
+export class MongoDbDriver implements IClientDriver {
   // the MongoClient from the JS library
   public client: MongoClient;
   public objects: Array<{
@@ -32,25 +35,6 @@ export class MongoDbDriver {
    */
   constructor(url: string, dbOptions: MongoClientOptions) {
     this.client = this.getMongoClientInstance(url, dbOptions);
-  }
-
-  /**
-   * returns the mongodb database object
-   *
-   * @param dbName the mongodb database name
-   */
-  public getDatabase$(dbName: string): Observable<Db> {
-    const connectedClient$ = from(this.openConnection(this.client));
-
-    return connectedClient$.pipe(
-      catchError(err => {
-        throw new Error(
-          "The MongoDB client could not be instantiated. Log from the MongoDB client:  " +
-            err
-        );
-      }),
-      map(client => client.db(dbName))
-    );
   }
 
   /**
@@ -88,25 +72,6 @@ export class MongoDbDriver {
         }
       );
     }
-
-    // return this.getDatabase$(dbName).pipe(
-    //   map(db => db.collection(collectionName)),
-    //   map(collection => collection.find().toArray()),
-    //   flatMap(response => response),
-    //   tap(_ => {
-    //     this.client.close();
-    //   })
-    // );
-  }
-
-  public findCollection$<T>(
-    dbName: string,
-    collectionName: string
-  ): Observable<T[]> | undefined {
-    const object = this.objects.find(
-      db => db.dbName === dbName && db.collectionName === collectionName
-    );
-    return object ? object.collection$ : undefined;
   }
 
   /**
@@ -120,26 +85,29 @@ export class MongoDbDriver {
    *
    * @returns Observable of result
    */
-  public writeOneToCollection$<T>(
-    databaseName: string,
+  public writeDataToCollection$<T>(
+    dbName: string,
     collectionName: string,
-    newItem: T
+    newItem: T | T[]
   ): Observable<IOperationResult> {
     const collectionObject = this.objects.find(
       object =>
-        object.dbName === databaseName &&
-        object.collectionName === collectionName
+        object.dbName === dbName && object.collectionName === collectionName
     );
     const connectedClient = from(this.openConnection(this.client));
     return new Observable<IOperationResult>(observer => {
       if (collectionObject) {
         connectedClient.subscribe(async client => {
-          const db = client.db(databaseName);
+          const db = client.db(dbName);
           const cl = db.collection(collectionName);
           const { insertedCount, insertedId } = await cl.insertOne(newItem);
           const clData = await cl.find({}).toArray();
           collectionObject.collection$.next(clData);
-          observer.next({ insertedCount, insertedId });
+          observer.next({
+            affectedCount: insertedCount as number,
+            affectedIds: [insertedId as string],
+            operationType: "create"
+          });
           observer.complete();
         });
       } else {
@@ -149,58 +117,6 @@ export class MongoDbDriver {
         // TODO: rename getCollection$ to registerCollection$
       }
     });
-
-    // return this.getDatabase$(databaseName).pipe(
-    //   map(db => db.collection(collectionName)),
-    //   mergeMap(collection => {
-    //     return from(collection.insertOne(newItem)).pipe(
-    //       map(res => ({ col: collection.find().toArray(), command: res }))
-    //     );
-    //   }),
-    //   flatMap(res => {
-    //     if (res.command.insertedCount === 1) {
-    //       return from(res.col);
-    //     } else {
-    //       throw new Error("ERROR - deleteOneFromCollection");
-    //     }
-    //   }),
-    //   tap(_ => {
-    //     this.client.close();
-    //   })
-    // );
-  }
-
-  /**
-   * write many documents to a mongodb collection
-   *
-   * @param collectionName the collection that will receive the new documents
-   * @param databaseName the database that contains the target
-   * collection to be updated
-   * @param newItems the new documents
-   */
-  public writeManyToCollection$<T>(
-    dbName: string,
-    collectionName: string,
-    newItems: T[]
-  ): Observable<T[]> {
-    return this.getDatabase$(dbName).pipe(
-      map(db => db.collection(collectionName)),
-      mergeMap(collection => {
-        return from(collection.insertMany(newItems)).pipe(
-          map(res => ({ col: collection.find().toArray(), command: res }))
-        );
-      }),
-      flatMap(res => {
-        if (res.command.insertedCount === newItems.length) {
-          return from(res.col);
-        } else {
-          throw new Error("ERROR - writeManyToCollection");
-        }
-      }),
-      tap(_ => {
-        this.client.close();
-      })
-    );
   }
 
   /**
@@ -212,30 +128,25 @@ export class MongoDbDriver {
    *
    * @returns the updated collection
    */
-  public deleteOneFromCollection$<T>(
+  public deleteDataFromCollection$<T>(
     dbName: string,
     collectionName: string,
     item: T
-  ): Observable<T[]> {
-    return this.getDatabase$(dbName).pipe(
-      // TODO: create custom operator
-      map(db => db.collection(collectionName)),
-      mergeMap(collection => {
-        return from(collection.deleteOne(item)).pipe(
-          map(res => ({ col: collection.find().toArray(), command: res }))
-        );
-      }),
-      flatMap(res => {
-        if (res.command.deletedCount === 1) {
-          return from(res.col);
-        } else {
-          throw new Error("ERROR - deleteOneFromCollection");
-        }
-      }),
-      tap(_ => {
-        this.client.close();
-      })
-    );
+  ): Observable<IOperationResult> {
+    return new Observable(obs => {
+      obs.next({ affectedCount: 0, affectedIds: [], operationType: "delete" });
+    });
+  }
+
+  public updateDataInCollection$<T>(
+    dbName: string,
+    collectionName: string,
+    oldItem: T,
+    newItem: T
+  ): Observable<IOperationResult> {
+    return new Observable<IOperationResult>(obs => {
+      obs.next({ affectedCount: 0, affectedIds: [], operationType: "update" });
+    });
   }
 
   /**
@@ -265,28 +176,33 @@ export class MongoDbDriver {
     );
   }
 
-  public updateOneFromCollection$<T>(
-    dbName: string,
-    collectionName: string,
-    oldItem: T,
-    newItem: T
-  ): Observable<T[]> {
-    return this.getDatabase$(dbName).pipe(
-      map(db => db.collection(collectionName)),
-      mergeMap(collection => {
-        return from(
-          collection.updateOne(oldItem, { $set: { ...newItem } })
-        ).pipe(
-          map(res => ({ col: collection.find().toArray(), command: res }))
+  /**
+   * returns the mongodb database object
+   *
+   * @param dbName the mongodb database name
+   */
+  private getDatabase$(dbName: string): Observable<Db> {
+    const connectedClient$ = from(this.openConnection(this.client));
+
+    return connectedClient$.pipe(
+      catchError(err => {
+        throw new Error(
+          "The MongoDB client could not be instantiated. Log from the MongoDB client:  " +
+            err
         );
       }),
-      flatMap(res => {
-        return from(res.col);
-      }),
-      tap(_ => {
-        this.client.close();
-      })
+      map(client => client.db(dbName))
     );
+  }
+
+  private findCollection$<T>(
+    dbName: string,
+    collectionName: string
+  ): Observable<T[]> | undefined {
+    const object = this.objects.find(
+      db => db.dbName === dbName && db.collectionName === collectionName
+    );
+    return object ? object.collection$ : undefined;
   }
 
   /**

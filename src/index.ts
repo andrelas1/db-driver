@@ -89,3 +89,5 @@ export class DatabaseDriver {
     }
   }
 }
+
+const list = ["a", "b", "c"];

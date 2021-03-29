@@ -159,7 +159,6 @@ describe("mongo driver", () => {
       beforeEach(async () => {
         col = await resetDatabaseBeforeTest("words");
         database$ = mongoDbDriver.getDatabase$(dbName);
-
       });
 
       test("should return the updated data when adding a new doc", done => {
@@ -203,8 +202,9 @@ describe("mongo driver", () => {
 
       describe("after writing the connection should be closed", () => {
         test("when writing many", done => {
-          const data$: Observable<IWord[]> = mongoDbDriver
-              .writeManyToCollection$<IWord>(dbName, "words", words);
+          const data$: Observable<IWord[]> = mongoDbDriver.writeManyToCollection$<
+            IWord
+          >(dbName, "words", words);
 
           data$.subscribe(data => {
             expect(mongoDbDriver.client.isConnected()).toBeFalsy();
@@ -218,8 +218,9 @@ describe("mongo driver", () => {
             name: "allemaal",
             translation: "all"
           };
-          const data$: Observable<IWord[]> = mongoDbDriver
-              .writeOneToCollection$<IWord>(dbName, "words", word);
+          const data$: Observable<IWord[]> = mongoDbDriver.writeOneToCollection$<
+            IWord
+          >(dbName, "words", word);
 
           data$.subscribe(data => {
             expect(mongoDbDriver.client.isConnected()).toBeFalsy();

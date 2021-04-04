@@ -1,3 +1,7 @@
+# ATTENTION
+
+This is half done. I didn't continue this project so if you want to use it, bear in mind that this is an unfinised product.
+
 # DATABASE DRIVER
 
 Wraps common CRUD functionalities of MongoDB, MySQL, PostgreSQL and LocalStorage (Browser) to a single API, adding more consistency and using the power of <br>

@@ -1,6 +1,6 @@
 # ATTENTION
 
-This is half done. I didn't continue this project so if you want to use it, bear in mind that this is an unfinised product.
+WORK IN PROGRESS - This is half done. I didn't continue this project so if you want to use it, bear in mind that this is an unfinished product.
 
 # DATABASE DRIVER
 
